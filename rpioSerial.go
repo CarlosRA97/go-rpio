@@ -1,5 +1,7 @@
 package rpio
 
+// +build linux
+
 import (
 	"os"
 	"syscall"
@@ -70,13 +72,18 @@ func OpenSerial(device string, baud int) Serial {
 		return -1
 	}
 	fd = int(file.Fd())
-	flock_t := syscall.Flock_t{}
-	syscall.FcntlFlock(uintptr(fd), syscall.F_SETFL, &flock_t)
-
 	syscall.Syscall(
-		syscall.SYS_GETATTRLIST,
+		syscall.SYS_FCNTL,
 		uintptr(fd),
-		uintptr(TCSANOW),
+		syscall.F_SETFL,
+		0,
+	)
+
+	// like tcgetattr() C function
+	syscall.Syscall(
+		syscall.SYS_IOCTL,
+		uintptr(fd),
+		uintptr(syscall.TIOCGETA),
 		uintptr(unsafe.Pointer(&options)),
 	)
 
@@ -94,10 +101,11 @@ func OpenSerial(device string, baud int) Serial {
 	options.Cc[syscall.VMIN] = 0
 	options.Cc[syscall.VTIME] = 100
 
+	// like tcsetattr() C function
 	syscall.Syscall(
-		syscall.SYS_SETATTRLIST,
+		syscall.SYS_IOCTL,
 		uintptr(fd),
-		uintptr(TCSANOW|syscall.TCSAFLUSH),
+		uintptr(syscall.TIOCSETAF), //TCSANOW|syscall.TCSAFLUSH
 		uintptr(unsafe.Pointer(&options)),
 	)
 
@@ -105,7 +113,7 @@ func OpenSerial(device string, baud int) Serial {
 		syscall.SYS_IOCTL,
 		uintptr(fd),
 		uintptr(TCGETS),
-		uintptr(status),
+		uintptr(unsafe.Pointer(&status)),
 	)
 
 	status |= syscall.TIOCM_DTR
@@ -115,7 +123,7 @@ func OpenSerial(device string, baud int) Serial {
 		syscall.SYS_IOCTL,
 		uintptr(fd),
 		uintptr(TCSETS),
-		uintptr(status),
+		uintptr(unsafe.Pointer(&status)),
 	)
 
 	time.Sleep(10 * time.Millisecond)
@@ -124,11 +132,15 @@ func OpenSerial(device string, baud int) Serial {
 }
 
 func (s Serial) Flush() {
+
+	const FREAD byte = 0x01
+	const FWRITE byte = 0x02
+
 	syscall.Syscall(
 		syscall.SYS_IOCTL,
 		uintptr(s),
 		uintptr(syscall.TCIOFLUSH),
-		uintptr(0),
+		uintptr(FREAD | FWRITE),
 	)
 }
 
@@ -146,7 +158,7 @@ func (s Serial) DataAvail() int {
 		syscall.SYS_IOCTL,
 		uintptr(s),
 		uintptr(0),
-		uintptr(result),
+		uintptr(unsafe.Pointer(&result)),
 	)
 
 	if err != 0 {
