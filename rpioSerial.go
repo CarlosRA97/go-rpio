@@ -140,7 +140,7 @@ func (s Serial) Flush() {
 		syscall.SYS_IOCTL,
 		uintptr(s),
 		uintptr(syscall.TCIOFLUSH),
-		uintptr(FREAD | FWRITE),
+		uintptr(FREAD|FWRITE),
 	)
 }
 
