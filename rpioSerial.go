@@ -3,22 +3,23 @@ package rpio
 import (
 	"os"
 	"syscall"
-	"unsafe"
 	"time"
+	"unsafe"
 )
 
 // ioctl constants
 const (
-	TCGETS = 0x5401
-	TCSETS = 0x5402
+	TCGETS  = 0x5401
+	TCSETS  = 0x5402
 	TCSANOW = 0x0
 )
 
 type Serial int
 
-func OpenSerial(device string, baud int) (fd Serial) {
-	var myBaud byte
-	var status, fd int
+func OpenSerial(device string, baud int) Serial {
+	var myBaud uint64
+	var status int
+	var fd int
 
 	options := syscall.Termios{}
 
@@ -64,30 +65,31 @@ func OpenSerial(device string, baud int) (fd Serial) {
 		return -2
 	}
 
-	file, err := os.OpenFile(device, os.O_RDWR|syscall.O_NOCTTY|syscall.O_NDELAY|syscall.O_NONBLOCK, 0)
+	file, err := os.OpenFile(device, syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_NDELAY|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		return
+		return -1
 	}
-	fd = file.Fd()
-	syscall.FcntlFlock(fd, syscall.F_SETFL, syscall.O_RDWR)
+	fd = int(file.Fd())
+	flock_t := syscall.Flock_t{}
+	syscall.FcntlFlock(uintptr(fd), syscall.F_SETFL, &flock_t)
 
 	syscall.Syscall(
 		syscall.SYS_GETATTRLIST,
 		uintptr(fd),
 		uintptr(TCSANOW),
-		uintptr(unsafe.Pointer(options)),
+		uintptr(unsafe.Pointer(&options)),
 	)
 
 	options.Ispeed = myBaud
 	options.Ospeed = myBaud
 
 	options.Cflag |= (syscall.CLOCAL | syscall.CREAD)
-	options.Cflag &= !syscall.PARENB
-	options.Cflag &= !syscall.CSTOPB
-	options.Cflag &= !syscall.CSIZE
+	options.Cflag &= 0xFFF
+	options.Cflag &= 0x3FF
+	options.Cflag &= 0xFF
 	options.Cflag |= syscall.CS8
-	options.Lflag &= !(syscall.ICANON | syscall.ECHO | syscall.ECHOE | syscall.ISIG)
-	options.Oflag &= !syscall.OPOST
+	options.Lflag &= 0x75 //~(syscall.ICANON | syscall.ECHO | syscall.ECHOE | syscall.ISIG)
+	options.Oflag &= 0x0
 
 	options.Cc[syscall.VMIN] = 0
 	options.Cc[syscall.VTIME] = 100
@@ -96,14 +98,14 @@ func OpenSerial(device string, baud int) (fd Serial) {
 		syscall.SYS_SETATTRLIST,
 		uintptr(fd),
 		uintptr(TCSANOW|syscall.TCSAFLUSH),
-		uintptr(unsafe.Pointer(options)),
+		uintptr(unsafe.Pointer(&options)),
 	)
 
 	syscall.Syscall(
 		syscall.SYS_IOCTL,
 		uintptr(fd),
 		uintptr(TCGETS),
-		uintptr(unsafe.Pointer(status)),
+		uintptr(status),
 	)
 
 	status |= syscall.TIOCM_DTR
@@ -113,12 +115,12 @@ func OpenSerial(device string, baud int) (fd Serial) {
 		syscall.SYS_IOCTL,
 		uintptr(fd),
 		uintptr(TCSETS),
-		uintptr(unsafe.Pointer(status)),
+		uintptr(status),
 	)
 
-	time.Sleep(10*time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
-	return fd
+	return Serial(fd)
 }
 
 func (s Serial) Flush() {
@@ -131,35 +133,34 @@ func (s Serial) Flush() {
 }
 
 func (s Serial) Close() {
-	syscall.Close(s)
+	syscall.Close(int(s))
 }
 
 func (s Serial) Puts(message string) {
-	syscall.Write(s, []byte(message))
+	syscall.Write(int(s), []byte(message))
 }
 
-func (s Serial) DataAvail() (result int) {
+func (s Serial) DataAvail() int {
 	var result int
-
-	_, _ , err := syscall.Syscall(
+	_, _, err := syscall.Syscall(
 		syscall.SYS_IOCTL,
 		uintptr(s),
 		uintptr(0),
-		uintptr(unsafe.Pointer(result)),
+		uintptr(result),
 	)
 
-	if err == -1 {
+	if err != 0 {
 		return -1
 	}
 
 	return result
 }
 
-func (s Serial) GetChar() (x []byte) {
+func (s Serial) GetChar() []byte {
 	var x []byte
-	_, err := syscall.Read(s, &x)
+	_, err := syscall.Read(int(s), x)
 	if err != nil {
-		return -1
+		return x
 	}
 	return x
 }
