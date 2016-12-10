@@ -3,10 +3,13 @@ package rpio
 // +build linux
 
 import (
+	"log"
 	"os"
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/CarlosRA97/go-rpio/ioctl"
 )
 
 // ioctl constants
@@ -80,8 +83,7 @@ func OpenSerial(device string, baud int) Serial {
 	)
 
 	// like tcgetattr() C function
-	syscall.Syscall(
-		syscall.SYS_IOCTL,
+	ioctl.IOCTL(
 		uintptr(fd),
 		uintptr(syscall.TIOCGETA),
 		uintptr(unsafe.Pointer(&options)),
@@ -102,15 +104,13 @@ func OpenSerial(device string, baud int) Serial {
 	options.Cc[syscall.VTIME] = 100
 
 	// like tcsetattr() C function
-	syscall.Syscall(
-		syscall.SYS_IOCTL,
+	ioctl.IOCTL(
 		uintptr(fd),
 		uintptr(syscall.TIOCSETAF), //TCSANOW|syscall.TCSAFLUSH
 		uintptr(unsafe.Pointer(&options)),
 	)
 
-	syscall.Syscall(
-		syscall.SYS_IOCTL,
+	ioctl.IOCTL(
 		uintptr(fd),
 		uintptr(TCGETS),
 		uintptr(unsafe.Pointer(&status)),
@@ -119,8 +119,7 @@ func OpenSerial(device string, baud int) Serial {
 	status |= syscall.TIOCM_DTR
 	status |= syscall.TIOCM_RTS
 
-	syscall.Syscall(
-		syscall.SYS_IOCTL,
+	ioctl.IOCTL(
 		uintptr(fd),
 		uintptr(TCSETS),
 		uintptr(unsafe.Pointer(&status)),
@@ -136,8 +135,7 @@ func (s Serial) Flush() {
 	const FREAD byte = 0x01
 	const FWRITE byte = 0x02
 
-	syscall.Syscall(
-		syscall.SYS_IOCTL,
+	ioctl.IOCTL(
 		uintptr(s),
 		uintptr(syscall.TCIOFLUSH),
 		uintptr(FREAD|FWRITE),
@@ -154,15 +152,14 @@ func (s Serial) Puts(message string) {
 
 func (s Serial) DataAvail() int {
 	var result int
-	_, _, err := syscall.Syscall(
-		syscall.SYS_IOCTL,
+	err := ioctl.IOCTL(
 		uintptr(s),
 		uintptr(0),
 		uintptr(unsafe.Pointer(&result)),
 	)
 
-	if err != 0 {
-		return -1
+	if err != nil {
+		log.Fatalln("Cant read data available")
 	}
 
 	return result

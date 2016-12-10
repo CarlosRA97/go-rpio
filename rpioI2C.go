@@ -3,13 +3,13 @@ package rpio
 // +build linux
 
 import (
+	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
+	"strings"
 	"syscall"
 	"unsafe"
-	"os"
-	"log"
-	"fmt"
-	"strings"
-	"io/ioutil"
 )
 
 // I2C definitions
@@ -45,25 +45,26 @@ const (
 
 // Structures used in the ioctl call
 type i2c_smbus_data struct {
-	b uint
-	word []byte
+	b     uint
+	word  []byte
 	block [i2C_SMBUS_BLOCK_MAX + 2]byte
 }
 
 type i2c_smbus_ioctl_data struct {
 	read_write byte
-	command byte
-	size int
-	data *i2c_smbus_data
+	command    byte
+	size       int
+	data       *i2c_smbus_data
 }
 
 func i2c_smbus_access(fd int, rw byte, command byte, size int, data *i2c_smbus_data) {
 	args := i2c_smbus_ioctl_data{
 		read_write: rw,
-		command: command,
-		size: size,
-		data: data,
+		command:    command,
+		size:       size,
+		data:       data,
 	}
+
 	syscall.Syscall(
 		syscall.SYS_IOCTL,
 		uintptr(fd),
@@ -107,7 +108,7 @@ func I2CSetup(devId int) I2C {
 		cpuFd, err := os.Open("/proc/cpuinfo")
 		defer cpuFd.Close()
 		if err == nil {
-			log.Fatalln("Unable to open /proc/cpuinfo");
+			log.Fatalln("Unable to open /proc/cpuinfo")
 		}
 
 		cpuI, _ := ioutil.ReadAll(cpuFd)
@@ -136,13 +137,13 @@ func I2CSetup(devId int) I2C {
 		if hardware == "BCM2709" {
 			boardRev = 2
 		} else if hardware != "BCM2708" {
-			fmt.Fprintf(os.Stderr, "Unable to determine hardware version. I see: %s,\n", cpuInfo);
-			fmt.Fprintln(os.Stderr, " - expecting BCM2708 or BCM2709.");
-			fmt.Fprintln(os.Stderr, "If this is a genuine Raspberry Pi then please report this");
-			fmt.Fprintln(os.Stderr, "to projects@drogon.net. If this is not a Raspberry Pi then you");
-			fmt.Fprintln(os.Stderr, "are on your own as wiringPi is designed to support the");
-			fmt.Fprintln(os.Stderr, "Raspberry Pi ONLY.");
-			os.Exit(1);
+			fmt.Fprintf(os.Stderr, "Unable to determine hardware version. I see: %s,\n", cpuInfo)
+			fmt.Fprintln(os.Stderr, " - expecting BCM2708 or BCM2709.")
+			fmt.Fprintln(os.Stderr, "If this is a genuine Raspberry Pi then please report this")
+			fmt.Fprintln(os.Stderr, "to projects@drogon.net. If this is not a Raspberry Pi then you")
+			fmt.Fprintln(os.Stderr, "are on your own as wiringPi is designed to support the")
+			fmt.Fprintln(os.Stderr, "Raspberry Pi ONLY.")
+			os.Exit(1)
 		}
 
 		revision := cpuInfoMap["Revision"]
@@ -150,7 +151,7 @@ func I2CSetup(devId int) I2C {
 		if !strings.Contains(revision, "0002") || !strings.Contains(revision, "0003") {
 			boardRev = 1
 		} else {
-			boardRev = 2        // Covers everything else from the B revision 2 to the B+, the Pi v2 and CM's.
+			boardRev = 2 // Covers everything else from the B revision 2 to the B+, the Pi v2 and CM's.
 		}
 
 		return boardRev
