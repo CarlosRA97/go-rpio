@@ -55,7 +55,7 @@ func (spi *SPIDevice) Open() error {
 func (spi *SPIDevice) Close() error {
 	err := spi.file.Close()
 	if err != nil {
-		return fmt.Errorf("Error closing spi", err)
+		return fmt.Errorf("Error closing spi: %s", err)
 	}
 	return nil
 }
